@@ -7,9 +7,13 @@ from modules import scripts, script_callbacks, shared
 
 warned_about_files = {}
 repo_dir = scripts.basedir()
-
+commentString_default = "#"
+emptyRex = re.compile(r"^\s*$", re.MULTILINE)
 
 class WildcardsScript(scripts.Script):
+    def __init__(self):
+        self.commentString = commentString_default
+
     def title(self):
         return "Simple wildcards"
 
@@ -25,7 +29,20 @@ class WildcardsScript(scripts.Script):
         replacement_file = os.path.join(wildcards_dir, f"{text}.txt")
         if os.path.exists(replacement_file):
             with open(replacement_file, encoding="utf8") as f:
-                return gen.choice(f.read().splitlines())
+                # print(f"replacing __{text}__")
+                replacerText = f.read()
+                # print(commentRex, replacerText)
+                if(self.commentString and self.commentString != ""):
+                    replacerText = re.sub(self.commentRex, "", replacerText)
+                lines = replacerText.splitlines()
+                # print(lines)
+                lines = list(filter(lambda a: not re.match(emptyRex, a), lines))
+                # print(lines)
+                if(len(lines)<=0):
+                    return text
+                choice = gen.choice(lines)
+                # print(f"replacing __{text}__ with '{choice}'")
+                return choice
         else:
             if replacement_file not in warned_about_files:
                 print(f"File {replacement_file} not found for the __{text}__ wildcard.", file=sys.stderr)
@@ -35,6 +52,9 @@ class WildcardsScript(scripts.Script):
 
     def replace_prompts(self, prompts, seeds):
         res = []
+        if hasattr(shared.opts, "wildcards_comment_char"):
+            self.commentString = re.escape(shared.opts.wildcards_comment_char)
+            self.commentRex = re.compile(f"\\s*{self.commentString}.+$", re.MULTILINE)
 
         for i, text in enumerate(prompts):
             gen = random.Random()
@@ -75,6 +95,7 @@ class WildcardsScript(scripts.Script):
 def on_ui_settings():
     shared.opts.add_option("wildcards_same_seed", shared.OptionInfo(False, "Use same seed for all images", section=("wildcards", "Wildcards")))
     shared.opts.add_option("wildcards_write_infotext", shared.OptionInfo(True, "Write original prompt to infotext", section=("wildcards", "Wildcards")).info("the original prompt before __wildcards__ are applied"))
+    shared.opts.add_option("wildcards_comment_char", shared.OptionInfo(commentString_default, "Char/string to begin a comment", section=("wildcards", "Wildcards")).info("Contents after this will be ignored until the end of the line in replacement files"))
 
 
 script_callbacks.on_ui_settings(on_ui_settings)
